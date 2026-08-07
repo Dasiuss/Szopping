@@ -16,7 +16,6 @@
 </head>
 <body>
   <header id="app-header" hidden>
-    <h1>Szopping</h1>
     <nav>
       <button id="tab-master" class="tab active" type="button">Lista</button>
       <button id="tab-shopping" class="tab" type="button">Zakupy</button>
@@ -37,11 +36,11 @@
     </section>
 
     <section id="view-master" hidden>
+      <ul id="master-list"></ul>
       <form id="add-form" autocomplete="off">
         <input id="add-input" type="text" placeholder="Nowy element..." maxlength="200" required>
         <button type="submit">Dodaj</button>
       </form>
-      <ul id="master-list"></ul>
     </section>
 
     <section id="view-shopping" hidden>
@@ -51,11 +50,6 @@
       <ul id="shopping-list"></ul>
     </section>
   </main>
-
-  <footer>
-    <span id="status">Ladowanie...</span>
-    <button id="logout-btn" class="logout" type="button" hidden>Wyloguj</button>
-  </footer>
 
   <script src="./config.js"></script>
   <script src="./app.js"></script>

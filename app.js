@@ -18,7 +18,6 @@
     loginEmail: document.getElementById('login-email'),
     loginPassword: document.getElementById('login-password'),
     loginError: document.getElementById('login-error'),
-    logoutBtn: document.getElementById('logout-btn'),
     master: document.getElementById('view-master'),
     shopping: document.getElementById('view-shopping'),
     masterList: document.getElementById('master-list'),
@@ -27,14 +26,12 @@
     addInput: document.getElementById('add-input'),
     clearBtn: document.getElementById('clear-btn'),
     tabMaster: document.getElementById('tab-master'),
-    tabShopping: document.getElementById('tab-shopping'),
-    status: document.getElementById('status')
+    tabShopping: document.getElementById('tab-shopping')
   };
 
   let items = [];
   let boughtSession = new Set();
   let currentView = 'master';
-  let lastSync = null;
   let session = loadSession();
 
   function loadSession() {
@@ -132,13 +129,11 @@
     els.login.hidden = false;
     els.master.hidden = true;
     els.shopping.hidden = true;
-    els.logoutBtn.hidden = true;
   }
 
   function showApp() {
     els.header.hidden = false;
     els.login.hidden = true;
-    els.logoutBtn.hidden = false;
     setView(currentView);
     fetchItems();
   }
@@ -147,21 +142,6 @@
     items.sort(function (a, b) {
       return a.name.localeCompare(b.name, 'pl', { sensitivity: 'base' });
     });
-  }
-
-  function setStatus(text) {
-    els.status.textContent = text;
-  }
-
-  function refreshStatus() {
-    if (lastSync) {
-      setStatus('Zaktualizowano ' + lastSync.toLocaleTimeString('pl-PL'));
-    }
-  }
-
-  function markSynced() {
-    lastSync = new Date();
-    refreshStatus();
   }
 
   function fetchItems() {
@@ -176,11 +156,8 @@
         }));
         sortItems();
         render();
-        markSynced();
       })
-      .catch(function () {
-        setStatus('Blad polaczenia z baza');
-      });
+      .catch(function () {});
   }
 
   function addItem(name) {
@@ -192,10 +169,7 @@
       if (rows && rows.length) items.push(rows[0]);
       sortItems();
       render();
-      markSynced();
-    }).catch(function () {
-      setStatus('Nie udalo sie dodac elementu');
-    });
+    }).catch(function () {});
   }
 
   function setToBuy(id, value) {
@@ -214,10 +188,7 @@
         }
       }
       render();
-      markSynced();
-    }).catch(function () {
-      setStatus('Nie udalo sie zapisac');
-    });
+    }).catch(function () {});
   }
 
   function removeItem(id) {
@@ -227,11 +198,8 @@
         items = items.filter(function (it) { return it.id !== id; });
         boughtSession.delete(id);
         render();
-        markSynced();
       })
-      .catch(function () {
-        setStatus('Nie udalo sie usunac');
-      });
+      .catch(function () {});
   }
 
   function toggleBought(id, checked) {
@@ -353,11 +321,6 @@
       els.loginError.textContent = 'Bledny email lub haslo';
       els.loginError.hidden = false;
     });
-  });
-
-  els.logoutBtn.addEventListener('click', function () {
-    clearSession();
-    showLogin();
   });
 
   els.addForm.addEventListener('submit', function (e) {

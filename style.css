@@ -42,17 +42,9 @@ header {
   z-index: 10;
 }
 
-h1 {
-  font-size: 1.35rem;
-  font-weight: 700;
-  text-align: center;
-  letter-spacing: 0.02em;
-}
-
 nav {
   display: flex;
   gap: 8px;
-  margin-top: 10px;
 }
 
 .tab {
@@ -79,17 +71,13 @@ main {
   max-width: 620px;
   margin: 0 auto;
   padding: 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 
 #add-form {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
-  position: sticky;
-  top: 88px;
-  background: var(--bg);
-  padding: 6px 0;
-  z-index: 5;
+  margin-top: 16px;
 }
 
 #add-input {
@@ -213,17 +201,6 @@ ul {
   border-radius: 12px;
 }
 
-footer {
-  padding: 10px 16px;
-  padding-bottom: max(10px, env(safe-area-inset-bottom));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
 #view-login {
   display: flex;
   align-items: center;
@@ -286,14 +263,4 @@ footer {
   color: var(--danger);
   text-align: center;
   font-size: 0.9rem;
-}
-
-.logout {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  text-decoration: underline;
-  font-size: 0.8rem;
-  cursor: pointer;
-  padding: 2px 4px;
 }
