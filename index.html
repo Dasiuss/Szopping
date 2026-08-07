@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <header>
+  <header id="app-header" hidden>
     <h1>Szopping</h1>
     <nav>
       <button id="tab-master" class="tab active" type="button">Lista</button>
@@ -24,7 +24,19 @@
   </header>
 
   <main>
-    <section id="view-master">
+    <section id="view-login">
+      <div class="login-card">
+        <h2>Szopping</h2>
+        <form id="login-form">
+          <input id="login-email" type="email" placeholder="Email" autocomplete="username" required>
+          <input id="login-password" type="password" placeholder="Haslo" autocomplete="current-password" required>
+          <button type="submit">Zaloguj</button>
+          <p id="login-error" class="error" hidden></p>
+        </form>
+      </div>
+    </section>
+
+    <section id="view-master" hidden>
       <form id="add-form" autocomplete="off">
         <input id="add-input" type="text" placeholder="Nowy element..." maxlength="200" required>
         <button type="submit">Dodaj</button>
@@ -42,6 +54,7 @@
 
   <footer>
     <span id="status">Ladowanie...</span>
+    <button id="logout-btn" class="logout" type="button" hidden>Wyloguj</button>
   </footer>
 
   <script src="./config.js"></script>

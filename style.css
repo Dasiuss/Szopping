@@ -212,7 +212,84 @@ ul {
 footer {
   padding: 10px 16px;
   padding-bottom: max(10px, env(safe-area-inset-bottom));
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+#view-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 28px 24px;
+}
+
+.login-card h2 {
+  text-align: center;
+  font-size: 1.3rem;
+  margin-bottom: 20px;
+  color: var(--accent-dark);
+}
+
+#login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#login-form input {
+  padding: 12px 14px;
+  font-size: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+}
+
+#login-form input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+#login-form button {
+  padding: 13px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+#login-form button:active {
+  background: var(--accent-dark);
+}
+
+.error {
+  color: var(--danger);
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.logout {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  text-decoration: underline;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 2px 4px;
 }

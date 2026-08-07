@@ -2,15 +2,23 @@
   'use strict';
 
   const REST_URL = SUPABASE_URL + '/rest/v1/items';
+  const AUTH_URL = SUPABASE_URL + '/auth/v1/token';
   const BASE_HEADERS = {
     'apikey': SUPABASE_KEY,
     'Accept': 'application/json',
     'Content-Type': 'application/json'
   };
-
+  const SESSION_KEY = 'szopping_session';
   const POLL_MS = 3000;
 
   const els = {
+    header: document.getElementById('app-header'),
+    login: document.getElementById('view-login'),
+    loginForm: document.getElementById('login-form'),
+    loginEmail: document.getElementById('login-email'),
+    loginPassword: document.getElementById('login-password'),
+    loginError: document.getElementById('login-error'),
+    logoutBtn: document.getElementById('logout-btn'),
     master: document.getElementById('view-master'),
     shopping: document.getElementById('view-shopping'),
     masterList: document.getElementById('master-list'),
@@ -27,18 +35,112 @@
   let boughtSession = new Set();
   let currentView = 'master';
   let lastSync = null;
+  let session = loadSession();
+
+  function loadSession() {
+    try {
+      var s = JSON.parse(localStorage.getItem(SESSION_KEY));
+      if (s && s.access_token) return s;
+    } catch (e) {}
+    return null;
+  }
+
+  function saveSession(s) {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(s));
+  }
+
+  function clearSession() {
+    localStorage.removeItem(SESSION_KEY);
+    session = null;
+  }
+
+  function refreshSession() {
+    return fetch(AUTH_URL + '?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: session.refresh_token })
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function (data) {
+      session = {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token || session.refresh_token,
+        expires_at: Date.now() + (data.expires_in || 3600) * 1000
+      };
+      saveSession(session);
+      return session;
+    }).catch(function (e) {
+      clearSession();
+      showLogin();
+      throw e;
+    });
+  }
+
+  function authHeaders() {
+    if (!session) return Promise.reject(new Error('no session'));
+    if (Date.now() >= session.expires_at - 60000) {
+      return refreshSession().then(function (s) {
+        return Object.assign({}, BASE_HEADERS, { 'Authorization': 'Bearer ' + s.access_token });
+      });
+    }
+    return Promise.resolve(
+      Object.assign({}, BASE_HEADERS, { 'Authorization': 'Bearer ' + session.access_token })
+    );
+  }
 
   function api(path, options) {
     options = options || {};
-    const req = {
-      method: options.method || 'GET',
-      headers: Object.assign({}, BASE_HEADERS, options.headers || {})
-    };
-    if (options.body !== undefined) req.body = options.body;
-    return fetch(REST_URL + path, req).then(function (res) {
+    return authHeaders().then(function (headers) {
+      var req = {
+        method: options.method || 'GET',
+        headers: Object.assign({}, headers, options.headers || {})
+      };
+      if (options.body !== undefined) req.body = options.body;
+      return fetch(REST_URL + path, req);
+    }).then(function (res) {
+      if (res.status === 401 || res.status === 403) {
+        clearSession();
+        showLogin();
+        throw new Error('HTTP ' + res.status);
+      }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
     });
+  }
+
+  function signIn(email, password) {
+    return fetch(AUTH_URL + '?grant_type=password', {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: password })
+    }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function (data) {
+      session = {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: Date.now() + (data.expires_in || 3600) * 1000
+      };
+      saveSession(session);
+    });
+  }
+
+  function showLogin() {
+    els.header.hidden = true;
+    els.login.hidden = false;
+    els.master.hidden = true;
+    els.shopping.hidden = true;
+    els.logoutBtn.hidden = true;
+  }
+
+  function showApp() {
+    els.header.hidden = false;
+    els.login.hidden = true;
+    els.logoutBtn.hidden = false;
+    setView(currentView);
+    fetchItems();
   }
 
   function sortItems() {
@@ -63,6 +165,7 @@
   }
 
   function fetchItems() {
+    if (!session) return Promise.resolve();
     return api('?select=id,name,to_buy&order=name.asc')
       .then(function (rows) {
         items = rows;
@@ -235,8 +338,27 @@
   }
 
   function pollTick() {
-    if (document.visibilityState === 'visible') fetchItems();
+    if (document.visibilityState === 'visible' && session) fetchItems();
   }
+
+  els.loginForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    els.loginError.hidden = true;
+    var email = els.loginEmail.value.trim();
+    var password = els.loginPassword.value;
+    signIn(email, password).then(function () {
+      els.loginPassword.value = '';
+      showApp();
+    }).catch(function () {
+      els.loginError.textContent = 'Bledny email lub haslo';
+      els.loginError.hidden = false;
+    });
+  });
+
+  els.logoutBtn.addEventListener('click', function () {
+    clearSession();
+    showLogin();
+  });
 
   els.addForm.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -255,7 +377,7 @@
   els.tabShopping.addEventListener('click', function () { setView('shopping'); });
 
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') fetchItems();
+    if (document.visibilityState === 'visible' && session) fetchItems();
   });
 
   if ('serviceWorker' in navigator) {
@@ -264,6 +386,5 @@
 
   setInterval(pollTick, POLL_MS);
 
-  setView('master');
-  fetchItems();
+  if (session) showApp(); else showLogin();
 })();
