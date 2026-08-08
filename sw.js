@@ -1,4 +1,4 @@
-const CACHE = 'szopping-v7';
+const CACHE = 'szopping-v8';
 const CORE = [
   './',
   './index.html',

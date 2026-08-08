@@ -151,8 +151,8 @@
     applyRealtimeAuth();
     client.connect();
     client.channel('db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, function () {
-        fetchItems();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, function (payload) {
+        handleRealtimeEvent(payload);
       })
       .subscribe(function (status) {
         if (status === 'CHANNEL_ERROR') fetchItems();
@@ -194,6 +194,42 @@
         render();
       })
       .catch(function () {});
+  }
+
+  function handleRealtimeEvent(payload) {
+    if (!payload || !session) return;
+
+    if (payload.eventType === 'DELETE' && payload.old && payload.old.id) {
+      items = items.filter(function (it) { return it.id !== payload.old.id; });
+      boughtSession.delete(payload.old.id);
+      render();
+      return;
+    }
+
+    var rec = payload.new;
+    if (!rec || !rec.id) return;
+
+    var existing = items.filter(function (it) { return it.id === rec.id; })[0];
+
+    if (payload.eventType === 'INSERT' || !existing) {
+      items.push(rec);
+      sortItems();
+      render();
+      return;
+    }
+
+    var wasToBuy = existing.to_buy || boughtSession.has(rec.id);
+    existing.name = rec.name;
+    existing.to_buy = rec.to_buy;
+
+    if (existing.to_buy) {
+      boughtSession.delete(rec.id);
+    } else if (wasToBuy) {
+      boughtSession.add(rec.id);
+    }
+
+    sortItems();
+    render();
   }
 
   function addItem(name) {
