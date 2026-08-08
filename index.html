@@ -53,5 +53,12 @@
 
   <script src="./config.js"></script>
   <script src="./app.js"></script>
+  <script type="module">
+    import { RealtimeClient } from 'https://cdn.jsdelivr.net/npm/@supabase/realtime-js@2/+esm';
+    window.__rt = window.__rt || {};
+    window.__rt.RealtimeClient = RealtimeClient;
+    window.__rt.ready = true;
+    if (typeof window.__rt.onReady === 'function') window.__rt.onReady();
+  </script>
 </body>
 </html>

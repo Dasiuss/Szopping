@@ -9,7 +9,7 @@
     'Content-Type': 'application/json'
   };
   const SESSION_KEY = 'szopping_session';
-  const POLL_MS = 3000;
+  const POLL_MS = 60000;
 
   const els = {
     header: document.getElementById('app-header'),
@@ -33,6 +33,12 @@
   let boughtSession = new Set();
   let currentView = 'master';
   let session = loadSession();
+  let realtimeStarted = false;
+
+  window.__rt = window.__rt || {};
+  window.__rt.onReady = function () {
+    if (session) startRealtime();
+  };
 
   function loadSession() {
     try {
@@ -66,6 +72,7 @@
         expires_at: Date.now() + (data.expires_in || 3600) * 1000
       };
       saveSession(session);
+      applyRealtimeAuth();
       return session;
     }).catch(function (e) {
       clearSession();
@@ -121,7 +128,35 @@
         expires_at: Date.now() + (data.expires_in || 3600) * 1000
       };
       saveSession(session);
+      applyRealtimeAuth();
     });
+  }
+
+  function applyRealtimeAuth() {
+    var client = window.__rt && window.__rt.client;
+    if (client && session && session.access_token) {
+      client.setAuth(session.access_token);
+    }
+  }
+
+  function startRealtime() {
+    var RT = window.__rt && window.__rt.RealtimeClient;
+    if (realtimeStarted || !RT || !session) return;
+    realtimeStarted = true;
+    var client = new RT(
+      SUPABASE_URL.replace('https://', 'wss://') + '/realtime/v1',
+      { params: { apikey: SUPABASE_KEY } }
+    );
+    window.__rt.client = client;
+    applyRealtimeAuth();
+    client.connect();
+    client.channel('db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, function () {
+        fetchItems();
+      })
+      .subscribe(function (status) {
+        if (status === 'CHANNEL_ERROR') fetchItems();
+      });
   }
 
   function showLogin() {
@@ -135,6 +170,7 @@
     els.header.hidden = false;
     els.login.hidden = true;
     setView(currentView);
+    startRealtime();
     fetchItems();
   }
 
@@ -340,7 +376,14 @@
   els.tabShopping.addEventListener('click', function () { setView('shopping'); });
 
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && session) fetchItems();
+    if (!session) return;
+    var client = window.__rt && window.__rt.client;
+    if (document.visibilityState === 'visible') {
+      fetchItems();
+      if (client && !client.isConnected()) client.connect();
+    } else if (client) {
+      client.disconnect();
+    }
   });
 
   if ('serviceWorker' in navigator) {
