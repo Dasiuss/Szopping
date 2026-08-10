@@ -211,7 +211,15 @@
 
     var existing = items.filter(function (it) { return it.id === rec.id; })[0];
 
-    if (payload.eventType === 'INSERT' || !existing) {
+    if (payload.eventType === 'INSERT' && existing) {
+      existing.name = rec.name;
+      existing.to_buy = rec.to_buy;
+      sortItems();
+      render();
+      return;
+    }
+
+    if (!existing) {
       items.push(rec);
       sortItems();
       render();
@@ -238,7 +246,16 @@
       headers: { 'Prefer': 'return=representation' },
       body: JSON.stringify({ name: name, to_buy: false })
     }).then(function (rows) {
-      if (rows && rows.length) items.push(rows[0]);
+      if (rows && rows.length) {
+        var rec = rows[0];
+        var existing = items.filter(function (it) { return it.id === rec.id; })[0];
+        if (existing) {
+          existing.name = rec.name;
+          existing.to_buy = rec.to_buy;
+        } else {
+          items.push(rec);
+        }
+      }
       sortItems();
       render();
     }).catch(function () {});
