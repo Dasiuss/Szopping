@@ -1,4 +1,4 @@
-const CACHE = 'szopping-v9';
+const CACHE = 'szopping-v10';
 const CORE = [
   './',
   './index.html',
@@ -34,7 +34,10 @@ self.addEventListener('activate', function (event) {
 self.addEventListener('fetch', function (event) {
   var req = event.request;
   if (req.method !== 'GET') return;
-  if (!req.url.startsWith(self.location.origin)) return;
+  var url = new URL(req.url);
+  var isSameOrigin = url.origin === self.location.origin;
+  var isRealtimeCdn = url.hostname === 'cdn.jsdelivr.net';
+  if (!isSameOrigin && !isRealtimeCdn) return;
 
   event.respondWith(
     caches.match(req).then(function (cached) {

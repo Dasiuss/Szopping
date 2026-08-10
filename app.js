@@ -9,6 +9,7 @@
     'Content-Type': 'application/json'
   };
   const SESSION_KEY = 'szopping_session';
+  const ITEMS_KEY = 'szopping_items';
   const POLL_MS = 60000;
 
   const els = {
@@ -34,6 +35,7 @@
   let currentView = 'master';
   let session = loadSession();
   let realtimeStarted = false;
+  let hasData = false;
 
   window.__rt = window.__rt || {};
   window.__rt.onReady = function () {
@@ -180,6 +182,29 @@
     });
   }
 
+  function persistCache() {
+    try {
+      localStorage.setItem(ITEMS_KEY, JSON.stringify({
+        items: items,
+        bought: Array.from(boughtSession)
+      }));
+    } catch (e) {}
+  }
+
+  function restoreCache() {
+    try {
+      var raw = localStorage.getItem(ITEMS_KEY);
+      if (!raw) return;
+      var data = JSON.parse(raw);
+      if (data && Array.isArray(data.items)) {
+        items = data.items;
+        boughtSession = new Set(Array.isArray(data.bought) ? data.bought : []);
+        hasData = true;
+        sortItems();
+      }
+    } catch (e) {}
+  }
+
   function fetchItems() {
     if (!session) return Promise.resolve();
     return api('?select=id,name,to_buy&order=name.asc')
@@ -190,6 +215,7 @@
         }).map(function (it) {
           return it.id;
         }));
+        hasData = true;
         sortItems();
         render();
       })
@@ -302,6 +328,7 @@
   }
 
   function render() {
+    if (hasData) persistCache();
     if (currentView === 'master') renderMaster();
     else renderShopping();
   }
@@ -445,5 +472,6 @@
 
   setInterval(pollTick, POLL_MS);
 
+  restoreCache();
   if (session) showApp(); else showLogin();
 })();
