@@ -184,10 +184,7 @@
 
   function persistCache() {
     try {
-      localStorage.setItem(ITEMS_KEY, JSON.stringify({
-        items: items,
-        bought: Array.from(boughtSession)
-      }));
+      localStorage.setItem(ITEMS_KEY, JSON.stringify(items));
     } catch (e) {}
   }
 
@@ -196,12 +193,16 @@
       var raw = localStorage.getItem(ITEMS_KEY);
       if (!raw) return;
       var data = JSON.parse(raw);
-      if (data && Array.isArray(data.items)) {
+      if (Array.isArray(data)) {
+        items = data;
+      } else if (data && Array.isArray(data.items)) {
         items = data.items;
-        boughtSession = new Set(Array.isArray(data.bought) ? data.bought : []);
-        hasData = true;
-        sortItems();
+      } else {
+        return;
       }
+      boughtSession = new Set();
+      hasData = true;
+      sortItems();
     } catch (e) {}
   }
 

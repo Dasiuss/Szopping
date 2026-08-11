@@ -1,10 +1,11 @@
-const CACHE = 'szopping-v10';
+const CACHE = 'szopping-v11';
 const CORE = [
   './',
   './index.html',
   './style.css',
   './app.js',
   './config.js',
+  './vendor/realtime.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png'
@@ -34,10 +35,7 @@ self.addEventListener('activate', function (event) {
 self.addEventListener('fetch', function (event) {
   var req = event.request;
   if (req.method !== 'GET') return;
-  var url = new URL(req.url);
-  var isSameOrigin = url.origin === self.location.origin;
-  var isRealtimeCdn = url.hostname === 'cdn.jsdelivr.net';
-  if (!isSameOrigin && !isRealtimeCdn) return;
+  if (!req.url.startsWith(self.location.origin)) return;
 
   event.respondWith(
     caches.match(req).then(function (cached) {
