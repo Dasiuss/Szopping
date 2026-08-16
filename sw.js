@@ -1,4 +1,6 @@
-const CACHE = 'szopping-v11';
+importScripts('./config.js');
+
+const CACHE = 'szopping-' + APP_VERSION;
 const CORE = [
   './',
   './index.html',

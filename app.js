@@ -26,6 +26,9 @@
     addForm: document.getElementById('add-form'),
     addInput: document.getElementById('add-input'),
     clearBtn: document.getElementById('clear-btn'),
+    masterEditBtn: document.getElementById('master-edit-btn'),
+    shoppingEditBtn: document.getElementById('shopping-edit-btn'),
+    version: document.getElementById('version'),
     tabMaster: document.getElementById('tab-master'),
     tabShopping: document.getElementById('tab-shopping')
   };
@@ -33,6 +36,7 @@
   let items = [];
   let boughtSession = new Set();
   let currentView = 'master';
+  let editMode = false;
   let session = loadSession();
   let realtimeStarted = false;
   let hasData = false;
@@ -176,11 +180,15 @@
     fetchItems();
   }
 
-  function sortItems() {
-    items.sort(function (a, b) {
-      return a.name.localeCompare(b.name, 'pl', { sensitivity: 'base' });
-    });
+  function compareOrder(a, b, key) {
+    var oa = (a[key] == null) ? Infinity : a[key];
+    var ob = (b[key] == null) ? Infinity : b[key];
+    if (oa !== ob) return oa - ob;
+    return a.name.localeCompare(b.name, 'pl', { sensitivity: 'base' });
   }
+
+  function byMasterOrder(a, b) { return compareOrder(a, b, 'master_order'); }
+  function byShopOrder(a, b) { return compareOrder(a, b, 'shop_order'); }
 
   function persistCache() {
     try {
@@ -202,13 +210,12 @@
       }
       boughtSession = new Set();
       hasData = true;
-      sortItems();
     } catch (e) {}
   }
 
   function fetchItems() {
     if (!session) return Promise.resolve();
-    return api('?select=id,name,to_buy&order=name.asc')
+    return api('?select=id,name,to_buy,master_order,shop_order')
       .then(function (rows) {
         items = rows;
         boughtSession = new Set(items.filter(function (it) {
@@ -217,7 +224,6 @@
           return it.id;
         }));
         hasData = true;
-        sortItems();
         render();
       })
       .catch(function () {});
@@ -239,23 +245,19 @@
     var existing = items.filter(function (it) { return it.id === rec.id; })[0];
 
     if (payload.eventType === 'INSERT' && existing) {
-      existing.name = rec.name;
-      existing.to_buy = rec.to_buy;
-      sortItems();
+      applyRecord(existing, rec);
       render();
       return;
     }
 
     if (!existing) {
       items.push(rec);
-      sortItems();
       render();
       return;
     }
 
     var wasToBuy = existing.to_buy || boughtSession.has(rec.id);
-    existing.name = rec.name;
-    existing.to_buy = rec.to_buy;
+    applyRecord(existing, rec);
 
     if (existing.to_buy) {
       boughtSession.delete(rec.id);
@@ -263,27 +265,45 @@
       boughtSession.add(rec.id);
     }
 
-    sortItems();
     render();
+  }
+
+  function applyRecord(target, rec) {
+    target.name = rec.name;
+    target.to_buy = rec.to_buy;
+    target.master_order = rec.master_order;
+    target.shop_order = rec.shop_order;
+  }
+
+  function nextOrder(key) {
+    var max = -1;
+    items.forEach(function (it) {
+      var v = it[key];
+      if (v != null && v > max) max = v;
+    });
+    return max + 1;
   }
 
   function addItem(name) {
     return api('', {
       method: 'POST',
       headers: { 'Prefer': 'return=representation' },
-      body: JSON.stringify({ name: name, to_buy: false })
+      body: JSON.stringify({
+        name: name,
+        to_buy: false,
+        master_order: nextOrder('master_order'),
+        shop_order: nextOrder('shop_order')
+      })
     }).then(function (rows) {
       if (rows && rows.length) {
         var rec = rows[0];
         var existing = items.filter(function (it) { return it.id === rec.id; })[0];
         if (existing) {
-          existing.name = rec.name;
-          existing.to_buy = rec.to_buy;
+          applyRecord(existing, rec);
         } else {
           items.push(rec);
         }
       }
-      sortItems();
       render();
     }).catch(function () {});
   }
@@ -343,7 +363,13 @@
       els.masterList.appendChild(empty);
       return;
     }
-    items.forEach(function (it) {
+    var sorted = items.slice().sort(byMasterOrder);
+    sorted.forEach(function (it, i) {
+      if (editMode) {
+        renderEditRow(els.masterList, it, 'master', i, sorted.length);
+        return;
+      }
+
       var li = document.createElement('li');
       li.className = 'item';
 
@@ -361,23 +387,83 @@
 
       label.appendChild(cb);
       label.appendChild(span);
-
-      var del = document.createElement('button');
-      del.className = 'delete';
-      del.type = 'button';
-      del.textContent = 'Usun';
-      del.addEventListener('click', function () {
-        removeItem(it.id);
-      });
-
       li.appendChild(label);
-      li.appendChild(del);
       els.masterList.appendChild(li);
     });
   }
 
+  function renderEditRow(listEl, it, view, idx, len) {
+    var li = document.createElement('li');
+    li.className = 'item edit';
+
+    var span = document.createElement('span');
+    span.className = 'name';
+    span.textContent = it.name;
+
+    var up = document.createElement('button');
+    up.type = 'button';
+    up.className = 'move up';
+    up.textContent = '▲';
+    up.disabled = idx === 0;
+    up.addEventListener('click', function () { moveItem(it.id, view, -1); });
+
+    var down = document.createElement('button');
+    down.type = 'button';
+    down.className = 'move down';
+    down.textContent = '▼';
+    down.disabled = idx === len - 1;
+    down.addEventListener('click', function () { moveItem(it.id, view, 1); });
+
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'delete';
+    del.textContent = 'Usun';
+    del.addEventListener('click', function () { removeItem(it.id); });
+
+    li.appendChild(span);
+    li.appendChild(up);
+    li.appendChild(down);
+    li.appendChild(del);
+    listEl.appendChild(li);
+  }
+
+  function moveItem(id, view, delta) {
+    var key = view === 'master' ? 'master_order' : 'shop_order';
+    var cmp = view === 'master' ? byMasterOrder : byShopOrder;
+    var arr = items.slice().sort(cmp);
+    var idx = -1;
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i].id === id) { idx = i; break; }
+    }
+    var newIdx = idx + delta;
+    if (idx < 0 || newIdx < 0 || newIdx >= arr.length) return;
+
+    var tmp = arr[idx];
+    arr[idx] = arr[newIdx];
+    arr[newIdx] = tmp;
+
+    var changes = [];
+    arr.forEach(function (it, pos) {
+      var was = it[key];
+      it[key] = pos;
+      if (was !== pos) changes.push(it);
+    });
+
+    render();
+    changes.forEach(function (it) {
+      var body = {};
+      body[key] = it[key];
+      api('?id=eq.' + encodeURIComponent(it.id), {
+        method: 'PATCH',
+        headers: { 'Prefer': 'return=representation' },
+        body: JSON.stringify(body)
+      }).catch(function () {});
+    });
+  }
+
   function renderShopping() {
-    var visible = items.filter(function (it) {
+    var all = items.slice().sort(byShopOrder);
+    var visible = editMode ? all : all.filter(function (it) {
       return it.to_buy || boughtSession.has(it.id);
     });
     els.shoppingList.textContent = '';
@@ -388,7 +474,12 @@
       els.shoppingList.appendChild(empty);
       return;
     }
-    visible.forEach(function (it) {
+    visible.forEach(function (it, i) {
+      if (editMode) {
+        renderEditRow(els.shoppingList, it, 'shopping', i, visible.length);
+        return;
+      }
+
       var bought = boughtSession.has(it.id);
 
       var li = document.createElement('li');
@@ -415,10 +506,25 @@
 
   function setView(view) {
     currentView = view;
+    editMode = false;
     els.master.hidden = view !== 'master';
     els.shopping.hidden = view !== 'shopping';
     els.tabMaster.classList.toggle('active', view === 'master');
     els.tabShopping.classList.toggle('active', view === 'shopping');
+    updateEditButtons();
+    render();
+  }
+
+  function updateEditButtons() {
+    var label = editMode ? 'Zakończ edycję' : 'Edytuj kolejność';
+    els.masterEditBtn.textContent = label;
+    els.shoppingEditBtn.textContent = label;
+    els.clearBtn.hidden = editMode;
+  }
+
+  function setEditMode(mode) {
+    editMode = mode;
+    updateEditButtons();
     render();
   }
 
@@ -455,6 +561,8 @@
 
   els.tabMaster.addEventListener('click', function () { setView('master'); });
   els.tabShopping.addEventListener('click', function () { setView('shopping'); });
+  els.masterEditBtn.addEventListener('click', function () { setEditMode(!editMode); });
+  els.shoppingEditBtn.addEventListener('click', function () { setEditMode(!editMode); });
 
   document.addEventListener('visibilitychange', function () {
     if (!session) return;
@@ -472,6 +580,8 @@
   }
 
   setInterval(pollTick, POLL_MS);
+
+  els.version.textContent = 'Wersja ' + APP_VERSION;
 
   restoreCache();
   if (session) showApp(); else showLogin();
