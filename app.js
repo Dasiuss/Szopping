@@ -115,6 +115,7 @@
         throw new Error('HTTP ' + res.status);
       }
       if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (res.status === 204) return null;
       return res.json();
     });
   }
@@ -242,7 +243,7 @@
     var rec = payload.new;
     if (!rec || !rec.id) return;
 
-    var existing = items.filter(function (it) { return it.id === rec.id; })[0];
+    var existing = findItem(rec.id);
 
     if (payload.eventType === 'INSERT' && existing) {
       applyRecord(existing, rec);
@@ -275,6 +276,26 @@
     target.shop_order = rec.shop_order;
   }
 
+  function findItem(id) {
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].id === id) return items[i];
+    }
+    return null;
+  }
+
+  function patchItem(id, patch) {
+    return api('?id=eq.' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=representation' },
+      body: JSON.stringify(patch)
+    }).then(function (rows) {
+      if (rows && rows.length) {
+        var it = findItem(id);
+        if (it) applyRecord(it, rows[0]);
+      }
+    }).catch(function () {});
+  }
+
   function nextOrder(key) {
     var max = -1;
     items.forEach(function (it) {
@@ -297,7 +318,7 @@
     }).then(function (rows) {
       if (rows && rows.length) {
         var rec = rows[0];
-        var existing = items.filter(function (it) { return it.id === rec.id; })[0];
+        var existing = findItem(rec.id);
         if (existing) {
           applyRecord(existing, rec);
         } else {
@@ -309,22 +330,7 @@
   }
 
   function setToBuy(id, value) {
-    return api('?id=eq.' + encodeURIComponent(id), {
-      method: 'PATCH',
-      headers: { 'Prefer': 'return=representation' },
-      body: JSON.stringify({ to_buy: value })
-    }).then(function (rows) {
-      if (rows && rows.length) {
-        var updated = rows[0];
-        for (var i = 0; i < items.length; i++) {
-          if (items[i].id === id) {
-            items[i].to_buy = updated.to_buy;
-            break;
-          }
-        }
-      }
-      render();
-    }).catch(function () {});
+    patchItem(id, { to_buy: value }).then(function () { render(); });
   }
 
   function removeItem(id) {
@@ -354,13 +360,37 @@
     else renderShopping();
   }
 
+  function renderEmpty(listEl, message) {
+    var empty = document.createElement('li');
+    empty.className = 'empty';
+    empty.textContent = message;
+    listEl.appendChild(empty);
+  }
+
+  function checkboxRow(it, checked, liClass, nameClass, onChange) {
+    var li = document.createElement('li');
+    li.className = 'item' + (liClass ? ' ' + liClass : '');
+
+    var label = document.createElement('label');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = checked;
+    cb.addEventListener('change', function () { onChange(cb.checked); });
+
+    var span = document.createElement('span');
+    span.className = 'name' + (nameClass ? ' ' + nameClass : '');
+    span.textContent = it.name;
+
+    label.appendChild(cb);
+    label.appendChild(span);
+    li.appendChild(label);
+    return li;
+  }
+
   function renderMaster() {
     els.masterList.textContent = '';
     if (items.length === 0) {
-      var empty = document.createElement('li');
-      empty.className = 'empty';
-      empty.textContent = 'Lista jest pusta. Dodaj pierwszy element.';
-      els.masterList.appendChild(empty);
+      renderEmpty(els.masterList, 'Lista jest pusta. Dodaj pierwszy element.');
       return;
     }
     var sorted = items.slice().sort(byMasterOrder);
@@ -369,26 +399,13 @@
         renderEditRow(els.masterList, it, 'master', i, sorted.length);
         return;
       }
-
-      var li = document.createElement('li');
-      li.className = 'item';
-
-      var label = document.createElement('label');
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = it.to_buy;
-      cb.addEventListener('change', function () {
-        setToBuy(it.id, cb.checked);
-      });
-
-      var span = document.createElement('span');
-      span.className = 'name' + (it.to_buy ? ' tobuy' : '');
-      span.textContent = it.name;
-
-      label.appendChild(cb);
-      label.appendChild(span);
-      li.appendChild(label);
-      els.masterList.appendChild(li);
+      els.masterList.appendChild(checkboxRow(
+        it,
+        it.to_buy,
+        '',
+        it.to_buy ? 'tobuy' : '',
+        function (v) { setToBuy(it.id, v); }
+      ));
     });
   }
 
@@ -451,13 +468,9 @@
 
     render();
     changes.forEach(function (it) {
-      var body = {};
-      body[key] = it[key];
-      api('?id=eq.' + encodeURIComponent(it.id), {
-        method: 'PATCH',
-        headers: { 'Prefer': 'return=representation' },
-        body: JSON.stringify(body)
-      }).catch(function () {});
+      var patch = {};
+      patch[key] = it[key];
+      patchItem(it.id, patch);
     });
   }
 
@@ -468,10 +481,7 @@
     });
     els.shoppingList.textContent = '';
     if (visible.length === 0) {
-      var empty = document.createElement('li');
-      empty.className = 'empty';
-      empty.textContent = 'Brak elementow do kupienia.';
-      els.shoppingList.appendChild(empty);
+      renderEmpty(els.shoppingList, 'Brak elementow do kupienia.');
       return;
     }
     visible.forEach(function (it, i) {
@@ -479,28 +489,14 @@
         renderEditRow(els.shoppingList, it, 'shopping', i, visible.length);
         return;
       }
-
       var bought = boughtSession.has(it.id);
-
-      var li = document.createElement('li');
-      li.className = 'item' + (bought ? ' bought' : '');
-
-      var label = document.createElement('label');
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = bought;
-      cb.addEventListener('change', function () {
-        toggleBought(it.id, cb.checked);
-      });
-
-      var span = document.createElement('span');
-      span.className = 'name' + (bought ? ' bought' : '');
-      span.textContent = it.name;
-
-      label.appendChild(cb);
-      label.appendChild(span);
-      li.appendChild(label);
-      els.shoppingList.appendChild(li);
+      els.shoppingList.appendChild(checkboxRow(
+        it,
+        bought,
+        bought ? 'bought' : '',
+        bought ? 'bought' : '',
+        function (v) { toggleBought(it.id, v); }
+      ));
     });
   }
 
